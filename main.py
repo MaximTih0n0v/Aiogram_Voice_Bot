@@ -2,12 +2,13 @@ from dotenv import load_dotenv
 import aiofiles
 import whisper
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message
+from aiogram.types import Message, FSInputFile
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 import os
 import uuid
 from aiohttp import web, ClientSession
 from aiogram.client.bot import DefaultBotProperties
+import tempfile
 
 load_dotenv()
 
@@ -19,6 +20,7 @@ WEBAPP_HOST = os.getenv('WEBAPP_HOST')
 WEBAPP_PORT = 8888
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENAI_TTS_URL = os.getenv('OPENAI_TTS_URL')
 
 bot = Bot(token=TG_API, default=DefaultBotProperties(parse_mode='HTML'))
 dp = Dispatcher()
@@ -62,7 +64,7 @@ async def get_openai_response(prompt):
     data = {
         "model": "gpt-3.5-turbo",
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 150,
+        "max_tokens": 200,
         "temperature": 0.7
     }
 
@@ -75,6 +77,32 @@ async def get_openai_response(prompt):
                 error_message = await response.text()
                 print(f"Failed to get OpenAI response: {response.status}, {error_message}")
                 return "Не удалось получить ответ от OpenAI."
+
+
+async def synthesize_speech(text):
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": "tts-1",
+        "input": text,
+        "voice": "nova",
+        "response_format": "mp3",
+        "speed": 1.0
+    }
+
+    async with ClientSession() as session:
+        async with session.post(OPENAI_TTS_URL, headers=headers, json=data) as response:
+            if response.status == 200:
+                audio_content = await response.read()
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_audio_file:
+                    temp_audio_file.write(audio_content)
+                    return temp_audio_file.name
+            else:
+                error_message = await response.text()
+                print(f"Не удалось получить ответ от OpenAI TTS: {response.status}, {error_message}")
+                return None
 
 
 async def handle_voice_message(message: Message):
@@ -94,6 +122,13 @@ async def handle_voice_message(message: Message):
             # Получаем ответ от OpenAI
             response = await get_openai_response(transcribed_text)
             await bot.send_message(chat_id, response)
+            print(f"Ответ от OpenAI: {response}")
+
+            audio_file_path = await synthesize_speech(response)
+            if audio_file_path:
+                audio_file = FSInputFile(audio_file_path)
+                await bot.send_voice(chat_id, audio_file)
+                os.remove(audio_file_path)
         else:
             await bot.send_message(chat_id, "Не удалось распознать текст!")
             print("Не удалось распознать текст!")
