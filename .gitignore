@@ -1,0 +1,11 @@
+venv/
+venv1/
+.env
+.env/
+*/migrations/*.py
+*/migrations/*.рус
+.idea/
+idea/
+.idea
+__pycache__/
+swh.py/

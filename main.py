@@ -1,0 +1,115 @@
+from dotenv import load_dotenv
+import aiofiles
+import whisper
+from aiogram import Bot, Dispatcher, F
+from aiogram.types import Message
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+import os
+import uuid
+from aiohttp import web, ClientSession
+from aiogram.client.bot import DefaultBotProperties
+
+load_dotenv()
+
+TG_API = os.getenv('TG_API')
+WEBHOOK_HOST = os.getenv('WEBHOOK_HOST')
+WEBHOOK_PATH = os.getenv('WEBHOOK_PATH')
+WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
+WEBAPP_HOST = os.getenv('WEBAPP_HOST')
+WEBAPP_PORT = 8888
+
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+
+bot = Bot(token=TG_API, default=DefaultBotProperties(parse_mode='HTML'))
+dp = Dispatcher()
+
+model = whisper.load_model('small')
+
+
+async def on_startup(app):
+    await bot.set_webhook(WEBHOOK_URL)
+    print("Bot started")
+
+
+async def on_shutdown(app):
+    await bot.delete_webhook()
+
+
+async def download_file(file_id, filename):
+    async with ClientSession() as session:
+        file_info = await bot.get_file(file_id)
+        file_path = file_info.file_path
+        ext = file_path.split('.')[-1]
+
+        file_url = f'https://api.telegram.org/file/bot{TG_API}/{file_path}'
+        async with session.get(file_url) as response:
+            if response.status == 200:
+                async with aiofiles.open(f'{filename}.{ext}', mode='wb') as f:
+                    content = await response.read()
+                    await f.write(content)
+                    return f'{filename}.{ext}'
+            else:
+                print(f"Failed to download file: {response.status}")
+                return None
+
+
+async def get_openai_response(prompt):
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": "gpt-3.5-turbo",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 150,
+        "temperature": 0.7
+    }
+
+    async with ClientSession() as session:
+        async with session.post(url, headers=headers, json=data) as response:
+            if response.status == 200:
+                result = await response.json()
+                return result['choices'][0]['message']['content'].strip()
+            else:
+                error_message = await response.text()
+                print(f"Failed to get OpenAI response: {response.status}, {error_message}")
+                return "Не удалось получить ответ от OpenAI."
+
+
+async def handle_voice_message(message: Message):
+    file_id = message.voice.file_id
+    chat_id = message.chat.id
+    filename = uuid.uuid4().hex
+
+    file_path = await download_file(file_id, filename)
+    if file_path:
+        result = model.transcribe(file_path, fp16=False)
+        transcribed_text = result.get('text', '').strip()
+
+        if transcribed_text:
+            await bot.send_message(chat_id, f"Распознанный текст: {transcribed_text}")
+            print(transcribed_text)
+
+            # Получаем ответ от OpenAI
+            response = await get_openai_response(transcribed_text)
+            await bot.send_message(chat_id, response)
+        else:
+            await bot.send_message(chat_id, "Не удалось распознать текст!")
+            print("Не удалось распознать текст!")
+
+        os.remove(file_path)
+
+
+dp.message.register(handle_voice_message, F.voice)
+
+if __name__ == "__main__":
+    app = web.Application()
+    handler = SimpleRequestHandler(dispatcher=dp, bot=bot)
+    handler.register(app, path=WEBHOOK_PATH)
+    setup_application(app, dp, bot=bot)
+
+    app.on_startup.append(on_startup)
+    app.on_shutdown.append(on_shutdown)
+
+    web.run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)
