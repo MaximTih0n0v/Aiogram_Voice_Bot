@@ -1,1 +1,1 @@
-worker: python aiogram voice bot.py
+worker: python main.py
