@@ -5,8 +5,8 @@ class Settings(BaseSettings):
     TG_API: str
     WEBHOOK_HOST: str
     WEBHOOK_PATH: str
-    WEBAPP_HOST: str = '0.0.0.0'
-    WEBAPP_PORT: int = 8888
+    WEBAPP_HOST: str
+    WEBAPP_PORT: int
     OPENAI_API_KEY: str
     OPENAI_TTS_URL: str
 

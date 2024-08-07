@@ -9,6 +9,7 @@ from aiohttp import web, ClientSession
 from aiogram.client.bot import DefaultBotProperties
 import tempfile
 from config import settings
+from openai import AsyncOpenAI
 
 
 TG_API = settings.TG_API
@@ -55,27 +56,21 @@ async def download_file(file_id, filename):
 
 
 async def get_openai_response(prompt):
-    url = "https://api.openai.com/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "model": "gpt-3.5-turbo",
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 200,
-        "temperature": 0.7
-    }
-
-    async with ClientSession() as session:
-        async with session.post(url, headers=headers, json=data) as response:
-            if response.status == 200:
-                result = await response.json()
-                return result['choices'][0]['message']['content'].strip()
-            else:
-                error_message = await response.text()
-                print(f"Failed to get OpenAI response: {response.status}, {error_message}")
-                return "Не удалось получить ответ от OpenAI."
+    client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=200,
+            temperature=0.7
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Failed to get OpenAI response: {e}")
+        return "Не удалось получить ответ от OpenAI."
 
 
 async def synthesize_speech(text):
