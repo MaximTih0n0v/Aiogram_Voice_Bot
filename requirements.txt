@@ -37,6 +37,7 @@ nvidia-nvtx-cu12==12.1.105
 openai-whisper==20231117
 platformdirs==4.2.2
 pydantic==2.8.2
+pydantic-settings==2.4.0
 pydantic_core==2.20.1
 python-dotenv==1.0.1
 regex==2024.7.24

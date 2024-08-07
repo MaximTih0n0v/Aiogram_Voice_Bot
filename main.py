@@ -1,4 +1,3 @@
-from dotenv import load_dotenv
 import aiofiles
 import whisper
 from aiogram import Bot, Dispatcher, F
@@ -9,18 +8,18 @@ import uuid
 from aiohttp import web, ClientSession
 from aiogram.client.bot import DefaultBotProperties
 import tempfile
+from config import settings
 
-load_dotenv()
 
-TG_API = os.getenv('TG_API')
-WEBHOOK_HOST = os.getenv('WEBHOOK_HOST')
-WEBHOOK_PATH = os.getenv('WEBHOOK_PATH')
+TG_API = settings.TG_API
+WEBHOOK_HOST = settings.WEBHOOK_HOST
+WEBHOOK_PATH = settings.WEBHOOK_PATH
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
-WEBAPP_HOST = os.getenv('WEBAPP_HOST')
-WEBAPP_PORT = 8888
+WEBAPP_HOST = settings.WEBAPP_HOST
+WEBAPP_PORT = settings.WEBAPP_PORT
 
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-OPENAI_TTS_URL = os.getenv('OPENAI_TTS_URL')
+OPENAI_API_KEY = settings.OPENAI_API_KEY
+OPENAI_TTS_URL = settings.OPENAI_TTS_URL
 
 bot = Bot(token=TG_API, default=DefaultBotProperties(parse_mode='HTML'))
 dp = Dispatcher()
